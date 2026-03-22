@@ -9,12 +9,8 @@ import java.util.Locale;
 import static org.junit.jupiter.api.Assertions.*;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Product tests
-//
-// Note: @Nested classes are avoided intentionally. JUnit 5 + Maven Surefire
-// generates an empty outer XML file for a class that only contains @Nested
-// classes (tests=0), which causes the Testream JUnit reporter to fail.
-// Keeping all methods flat produces a single, well-formed XML per class.
+// Product tests — keeping methods flat (compare with CartTest which uses
+// @Nested classes to demonstrate both styles work with the Testream reporter).
 //
 // See the "INTENTIONALLY FAILING" comment below for a test that is
 // deliberately broken to demonstrate Testream failure inspection in Jira.
