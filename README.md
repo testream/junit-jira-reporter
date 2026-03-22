@@ -76,7 +76,7 @@ npx @testream/junit-reporter \
 The Testream JUnit reporter is a CLI tool (`@testream/junit-reporter`) rather than an in-process reporter. It reads the JUnit XML files that Maven Surefire writes to `target/surefire-reports/`, converts them to CTRF format, and uploads to Testream. Key points:
 
 - Maven must run with `-Dmaven.test.failure.ignore=true` in CI so the build exits with code 0 even when tests fail — this ensures the upload step always runs and no results are lost.
-- The default JUnit XML path (`target/surefire-reports/TEST-*.xml`) matches Maven Surefire's output with no extra configuration. If your project writes XML reports to a different location, pass the path with `--junit-path`:
+- The default JUnit XML path (`target/surefire-reports/TEST-*.xml`) matches Maven Surefire's output with no extra configuration. If your project writes XML reports to a different location, pass the path explicitly: `--junit-path "your/reports/**/*.xml"`. If your project writes XML reports to a different location, pass the path with `--junit-path`:
   ```bash
   npx @testream/junit-reporter --api-key "$TESTREAM_API_KEY" --junit-path "./build/test-results/**/*.xml"
   ```
