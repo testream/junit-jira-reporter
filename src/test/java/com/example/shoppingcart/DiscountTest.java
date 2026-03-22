@@ -1,0 +1,181 @@
+package com.example.shoppingcart;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+
+import java.time.Instant;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Discount tests
+//
+// See the "INTENTIONALLY FAILING" comment below for a test that is
+// deliberately broken to demonstrate Testream failure inspection in Jira.
+// ─────────────────────────────────────────────────────────────────────────────
+@DisplayName("Discount")
+class DiscountTest {
+
+    private static final Instant FUTURE = Instant.parse("2099-12-31T00:00:00Z");
+    private static final Instant NOW    = Instant.parse("2025-06-01T12:00:00Z");
+
+    private static final Discount.Coupon PERCENTAGE_COUPON =
+            new Discount.Coupon("SUMMER20", Discount.CouponType.PERCENTAGE, 20, FUTURE);
+
+    private static final Discount.Coupon FIXED_COUPON =
+            new Discount.Coupon("SAVE500", Discount.CouponType.FIXED, 500, FUTURE);
+
+    @Nested
+    @DisplayName("applyPercentage")
+    class ApplyPercentageTests {
+
+        @Test
+        @DisplayName("applies a 20% discount to a price")
+        void twentyPercent() {
+            assertEquals(800, Discount.applyPercentage(1000, 20));
+        }
+
+        @Test
+        @DisplayName("applies a 0% discount (no change)")
+        void zeroPercent() {
+            assertEquals(1000, Discount.applyPercentage(1000, 0));
+        }
+
+        @Test
+        @DisplayName("applies a 100% discount (free)")
+        void hundredPercent() {
+            assertEquals(0, Discount.applyPercentage(1000, 100));
+        }
+
+        @Test
+        @DisplayName("clamps to 0 and never returns negative")
+        void clampedToZero() {
+            assertTrue(Discount.applyPercentage(100, 100) >= 0);
+        }
+
+        @Test
+        @DisplayName("throws when percent is below 0")
+        void throwsForNegativePercent() {
+            assertThrows(IllegalArgumentException.class, () -> Discount.applyPercentage(1000, -1));
+        }
+
+        @Test
+        @DisplayName("throws when percent exceeds 100")
+        void throwsForOver100Percent() {
+            assertThrows(IllegalArgumentException.class, () -> Discount.applyPercentage(1000, 101));
+        }
+    }
+
+    @Nested
+    @DisplayName("applyFixed")
+    class ApplyFixedTests {
+
+        @Test
+        @DisplayName("subtracts a fixed amount from the price")
+        void subtractsAmount() {
+            assertEquals(700, Discount.applyFixed(1000, 300));
+        }
+
+        @Test
+        @DisplayName("clamps to 0 when discount exceeds price")
+        void clampedWhenExceedsPrice() {
+            assertEquals(0, Discount.applyFixed(200, 500));
+        }
+
+        @Test
+        @DisplayName("returns unchanged price for a zero discount")
+        void zeroDiscount() {
+            assertEquals(1000, Discount.applyFixed(1000, 0));
+        }
+
+        @Test
+        @DisplayName("throws when discount amount is negative")
+        void throwsForNegativeAmount() {
+            assertThrows(IllegalArgumentException.class, () -> Discount.applyFixed(1000, -1));
+        }
+    }
+
+    @Nested
+    @DisplayName("validateCoupon")
+    class ValidateCouponTests {
+
+        @Test
+        @DisplayName("returns no errors for a valid percentage coupon")
+        void validPercentageCoupon() {
+            assertTrue(Discount.validateCoupon(PERCENTAGE_COUPON, 5000, NOW).isEmpty());
+        }
+
+        @Test
+        @DisplayName("returns no errors for a valid fixed coupon")
+        void validFixedCoupon() {
+            assertTrue(Discount.validateCoupon(FIXED_COUPON, 5000, NOW).isEmpty());
+        }
+
+        @Test
+        @DisplayName("reports an error when the coupon has expired")
+        void expiredCoupon() {
+            Discount.Coupon expired = new Discount.Coupon(
+                    "OLD10", Discount.CouponType.PERCENTAGE, 10, Instant.parse("2020-01-01T00:00:00Z"));
+            List<String> errors = Discount.validateCoupon(expired, 5000, NOW);
+            assertTrue(errors.contains("Coupon has expired"));
+        }
+
+        @Test
+        @DisplayName("reports an error when the minimum order value is not met")
+        void minimumOrderNotMet() {
+            Discount.Coupon coupon = new Discount.Coupon(
+                    "BIG20", Discount.CouponType.PERCENTAGE, 20, FUTURE, 10000);
+            List<String> errors = Discount.validateCoupon(coupon, 5000, NOW);
+            assertTrue(errors.stream().anyMatch(e -> e.contains("Minimum order value")));
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // INTENTIONALLY FAILING TEST
+        //
+        // This test checks that an expired coupon with an unmet minimum order
+        // value produces 3 errors. The real implementation returns 2.
+        // This simulates a developer adding a validation rule and forgetting to
+        // update the test. Testream will flag this in Jira with the exact diff.
+        // ─────────────────────────────────────────────────────────────────────
+        @Test
+        @DisplayName("reports multiple errors for an expired coupon that also fails min order check")
+        void multipleValidationErrors() {
+            Discount.Coupon badCoupon = new Discount.Coupon(
+                    "BAD", Discount.CouponType.PERCENTAGE, 10,
+                    Instant.parse("2020-01-01T00:00:00Z"), 20000);
+            List<String> errors = Discount.validateCoupon(badCoupon, 5000, NOW);
+            // BUG: expects 3 errors but only 2 are returned (expired + min order)
+            assertEquals(3, errors.size(),
+                    "Expected 3 validation errors but got: " + errors);
+        }
+    }
+
+    @Nested
+    @DisplayName("applyCoupon")
+    class ApplyCouponTests {
+
+        @Test
+        @DisplayName("applies a valid percentage coupon")
+        void applyPercentageCoupon() {
+            assertEquals(800, Discount.applyCoupon(1000, PERCENTAGE_COUPON, NOW)); // 20% off
+        }
+
+        @Test
+        @DisplayName("applies a valid fixed coupon")
+        void applyFixedCoupon() {
+            assertEquals(500, Discount.applyCoupon(1000, FIXED_COUPON, NOW)); // 500 off
+        }
+
+        @Test
+        @DisplayName("throws when an expired coupon is applied")
+        void throwsForExpiredCoupon() {
+            Discount.Coupon expired = new Discount.Coupon(
+                    "OLD10", Discount.CouponType.PERCENTAGE, 10, Instant.parse("2020-01-01T00:00:00Z"));
+            Exception ex = assertThrows(IllegalArgumentException.class,
+                    () -> Discount.applyCoupon(1000, expired, NOW));
+            assertEquals("Coupon has expired", ex.getMessage());
+        }
+    }
+}

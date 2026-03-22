@@ -1,0 +1,46 @@
+name: JUnit Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Run JUnit tests
+        # -Dmaven.test.failure.ignore=true ensures Maven exits with code 0 even when
+        # tests fail, so the upload step always runs and results are never lost.
+        run: mvn -B test -Dmaven.test.failure.ignore=true
+
+      - name: Upload results to Testream
+        # Reads the JUnit XML from target/surefire-reports/ (Maven Surefire default).
+        # Add TESTREAM_API_KEY as a repository secret (Settings → Secrets → Actions).
+        # branch, commit-sha, repository-url, build-number, and build-url are
+        # auto-detected by the reporter from the CI environment.
+        run: |
+          npx @testream/junit-reporter \
+            --api-key "$TESTREAM_API_KEY" \
+            --app-name junit-jira-reporter-example \
+            --app-version "${{ github.sha }}" \
+            --test-environment ci \
+            --test-type unit \
+            --fail-on-error
+        env:
+          TESTREAM_API_KEY: ${{ secrets.TESTREAM_API_KEY }}
