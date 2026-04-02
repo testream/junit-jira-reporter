@@ -1,111 +1,173 @@
-# JUnit Reporter for Jira Teams using Testream
+# JUnit Jira Reporter: Send JUnit 5 Results to Jira with Testream
 
-This repository demonstrates how to integrate [JUnit 5](https://junit.org/junit5/) with [Testream](https://testream.app) so that test results are automatically uploaded to your Jira workspace after every CI run.
+This repository is a practical **JUnit + Jira integration example** using [`@testream/junit-reporter`](https://docs.testream.app/reporters/junit). It shows how to run JUnit 5 tests, generate Maven Surefire XML, and upload results to Jira through Testream from local runs and GitHub Actions.
+
+If you are searching for **"JUnit Jira reporter"**, **"Maven test results to Jira"**, or **"GitHub Actions JUnit Jira integration"**, this repo is the implementation template.
+
+## Why this example is useful
+
+- **Maven-based flow**: Uses standard Surefire XML output.
+- **CI-safe upload pattern**: Keeps upload step running even when tests fail.
+- **Minimal wiring**: Reporter auto-detects most CI metadata.
+- **Real triage demo**: Intentional failing tests show Jira-side failure handling.
 
 ## What is Testream?
 
-[Testream](https://testream.app) is a test reporting tool for Jira teams. It imports CI/CD test results from native reporters (Vitest, Playwright, Jest, Cypress, .NET, JUnit, and others), giving your team failure inspection, trends, and release visibility directly inside Jira — without manual test case management.
+[Testream](https://testream.app) is an automated test management and reporting platform for Jira teams. It ingests test results from JUnit and many other frameworks, then provides failure diagnostics, trends, and release-level quality views in Jira.
 
-Once configured, every JUnit run streams structured results to Testream. Failed tests appear in Jira with the full error message and stack trace attached, so triage starts with complete context.
+If this sample repository is not the framework you need, browse all native reporters in the Testream docs: <https://docs.testream.app/>.
+
+### Watch Testream in action
+
+Click to see how Testream turns raw CI test results into actionable Jira insights (failures, trends, and release visibility):  
+[![Watch the video](https://img.youtube.com/vi/5sDao2Q8k1k/maxresdefault.jpg)](https://www.youtube.com/watch?v=5sDao2Q8k1k)
+
+Install **[Testream Automated Test Management and Reporting for Jira](https://marketplace.atlassian.com/apps/3048460704/testream-automated-test-management-and-reporting-for-jira)** in your Jira workspace to view uploaded runs.
 
 ## Project structure
 
-```
+```text
 src/
   main/java/com/example/shoppingcart/
-    Cart.java        — Cart class: add/remove items, calculate totals, checkout
-    CartItem.java    — Cart item value object
-    Product.java     — Product class with validation, pricing, and formatting helpers
-    Discount.java    — Coupon class with percentage, fixed, and validation logic
+    Cart.java
+    CartItem.java
+    Product.java
+    Discount.java
   test/java/com/example/shoppingcart/
-    CartTest.java     — Cart tests (passing + 1 intentional failure)
-    ProductTest.java  — Product tests (passing + 1 intentional failure)
-    DiscountTest.java — Discount tests (passing + 1 intentional failure)
+    CartTest.java     - Passing + intentional failure
+    ProductTest.java  - Passing + intentional failure
+    DiscountTest.java - Passing + intentional failure
 pom.xml
 .github/workflows/junit.yml
 .env.example
 ```
 
-The three intentionally failing tests exist so you can see exactly what a failed test looks like inside Testream and Jira — with the error diff and stack trace surfaced in the dashboard.
+The intentional failures help you verify how failed JUnit tests appear in Testream/Jira.
 
-## Getting started
+## Quick start: JUnit to Jira reporting
 
-### 1. Install Testream for Jira
+### 1. Create your Testream project and API key
 
-Install the **[Testream for Jira](https://marketplace.atlassian.com/apps/3048460704/testream-for-jira)** app from the Atlassian Marketplace into your Jira workspace. This is what surfaces test results, failure details, trends, and dashboards inside Jira.
+1. Sign in at [testream.app](https://testream.app).
+2. Create a project.
+3. Copy your API key.
 
-### 2. Create a Testream project
-
-1. Sign in at [testream.app](https://testream.app) (free plan available).
-2. Create a project and copy your API key.
-
-### 3. Install dependencies
+### 2. Install dependencies
 
 ```bash
 mvn test -DskipTests
 ```
 
-> Requires [Java 17+](https://adoptium.net) and [Maven 3.8+](https://maven.apache.org/download.cgi).
+Requires Java 17+ and Maven 3.8+.
 
-### 4. Configure your API key
+### 3. Set API key
 
-Set `TESTREAM_API_KEY` as a GitHub Actions secret (see [CI with GitHub Actions](#ci-with-github-actions) below). For local uploads, export the variable in your shell:
+For local uploads:
 
 ```bash
-export TESTREAM_API_KEY=your_api_key_here
+export TESTREAM_API_KEY=<your key>
 ```
 
-### 5. Run the tests
+For CI uploads, add it as a GitHub Actions secret.
+
+### 4. Run JUnit tests
 
 ```bash
 mvn test
 ```
 
-Maven writes JUnit XML reports to `target/surefire-reports/`. To upload results locally:
+Surefire writes XML reports to `target/surefire-reports/`.
+
+### 5. Upload results locally
 
 ```bash
 npx @testream/junit-reporter \
   --api-key "$TESTREAM_API_KEY" \
   --app-name junit-jira-reporter-example \
   --test-environment local \
-  --test-type unit
+  --test-type unit \
+  --fail-on-error
 ```
 
-## Testream reporter configuration
+## Reporter configuration (`@testream/junit-reporter`)
 
-The Testream JUnit reporter is a CLI tool (`@testream/junit-reporter`) rather than an in-process reporter. It reads the JUnit XML files that Maven Surefire writes to `target/surefire-reports/`, converts them to CTRF format, and uploads to Testream. Key points:
+This repo uses the CLI uploader, which reads JUnit XML and uploads to Testream.
 
-- Maven must run with `-Dmaven.test.failure.ignore=true` in CI so the build exits with code 0 even when tests fail — this ensures the upload step always runs and no results are lost.
-- The default JUnit XML path (`target/surefire-reports/TEST-*.xml`) matches Maven Surefire's output with no extra configuration. If your project writes XML reports to a different location, pass the path explicitly: `--junit-path "your/reports/**/*.xml"`. If your project writes XML reports to a different location, pass the path with `--junit-path`:
-  ```bash
-  npx @testream/junit-reporter --api-key "$TESTREAM_API_KEY" --junit-path "./build/test-results/**/*.xml"
-  ```
-- `--fail-on-error` is recommended in CI so a broken upload does not silently swallow results.
-- `--branch`, `--commit-sha`, `--repository-url`, `--build-number`, and `--build-url` are **auto-detected** by the reporter — no manual wiring needed.
+Key behavior:
 
-See the [Testream JUnit reporter docs](https://docs.testream.app/reporters/junit) for the full list of CLI options.
+- Default XML path matches Surefire output (`target/surefire-reports/TEST-*.xml`).
+- You can override report path with `--junit-path`.
+- `--fail-on-error` is enabled in CI upload step.
+- CI metadata (`branch`, `commit-sha`, `repository-url`, `build-number`, `build-url`) is auto-detected.
 
-## CI with GitHub Actions
+Reporter docs: <https://docs.testream.app/reporters/junit>
 
-The workflow at `.github/workflows/junit.yml` runs all tests on every push and pull request. The only secret you need to add is your Testream API key:
+## GitHub Actions setup
 
-**Settings → Secrets and variables → Actions → New repository secret**
+The workflow at `.github/workflows/junit.yml` runs on pushes, pull requests, and manual dispatch.
+
+Add this repository secret:
+
+**Settings -> Secrets and variables -> Actions -> New repository secret**
 
 | Name | Value |
 |---|---|
-| `TESTREAM_API_KEY` | your Testream API key |
+| `TESTREAM_API_KEY` | Your Testream API key |
 
-All other metadata (branch, commit SHA, build number, build URL, repository URL) is resolved automatically — nothing else to configure.
+Important CI pattern used in this repo:
 
-## Viewing results in Jira
+- Maven runs with `-Dmaven.test.failure.ignore=true` so upload still executes even if tests fail.
 
-Once tests are uploaded, open your Testream project and connect it to your Jira workspace. With the **[Testream for Jira](https://marketplace.atlassian.com/apps/3048460704/testream-for-jira)** app installed you get:
+## How results appear in Jira
 
-- **Dashboard** — pass rates, failure counts, flaky test detection, and execution summaries at a glance
-- **Failure Insights** — inspect failed tests with the full error, stack trace, and diff
-- **Trends & Analytics** — pass/fail trends, duration patterns, and suite growth over custom date ranges
-- **Test Suite Changes** — see which tests were added or removed between runs
-- **Release Visibility** — link test runs to Jira releases to track quality before shipping
-- **Jira Issues** — create issues directly from any failed test with failure context pre-filled
+After connecting Testream to Jira, you get:
 
-See the [Testream JUnit reporter docs](https://docs.testream.app/reporters/junit) for the full list of configuration options.
+- Dashboard summaries for run health
+- Failure diagnostics with stack traces and assertion details
+- Trend analytics over time
+- Jira issue creation directly from failed tests
+
+## Troubleshooting
+
+### No uploads after test execution
+
+- Ensure `TESTREAM_API_KEY` is set in env/secrets.
+- Confirm JUnit XML exists in `target/surefire-reports/`.
+
+### Custom report path not found
+
+- Pass explicit glob with `--junit-path`, for example:
+  `--junit-path "./build/test-results/**/*.xml"`
+
+### CI run has tests but no Jira data
+
+- Verify Testream project is connected to the correct Jira workspace.
+
+## FAQ
+
+### Is this a production setup?
+
+It is an example repository with production-style CI and upload wiring intended for adaptation.
+
+### Why are tests intentionally failing?
+
+To demonstrate end-to-end failure triage in Jira.
+
+### Can I use Gradle instead of Maven?
+
+Yes, as long as you produce JUnit XML and point `@testream/junit-reporter` at that path.
+
+## JUnit Jira reporting alternatives (quick view)
+
+| Approach | Benefit | Tradeoff |
+|---|---|---|
+| Store Surefire XML as artifact | Easy baseline | Limited Jira-native analysis |
+| Custom parser/uploader | Full control | More maintenance burden |
+| Testream JUnit reporter (this repo) | Native Jira-focused reporting with low setup overhead | Requires Testream setup |
+
+## Related links
+
+- Testream app: <https://testream.app>
+- Testream Automated Test Management and Reporting for Jira: <https://marketplace.atlassian.com/apps/3048460704/testream-automated-test-management-and-reporting-for-jira>
+- JUnit reporter docs: <https://docs.testream.app/reporters/junit>
+- JUnit docs: <https://junit.org/junit5/>
